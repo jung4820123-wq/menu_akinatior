@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>점심메뉴 아키네이터 (웹)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f7fafc;
+    }
+    .app-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 28px 32px 28px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+    .title-block h1 {
+      margin: 0 0 8px 0;
+      font-size: 32px;
+    }
+    .title-block .sub {
+      font-size: 13px;
+      color: #718096;
+    }
+
+    .genie-block {
+      flex: 0 0 280px; /* 오른쪽 영역 폭 */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .genie-block img {
+      width: 100%;
+      max-height: 540px;   /* 예전보다 3배쯤 크게 */
+      object-fit: cover;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+    }
+
+    .question-block {
+      margin-top: 12px;
+      margin-bottom: 8px;
+    }
+    .question-text {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .desc {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 14px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      background: #edf2f7;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button:hover:not(:disabled) {
+      background: #e2e8f0;
+      transform: translateY(-1px);
+    }
+    button.primary {
+      background: #3182ce;
+      color: white;
+    }
+    button.primary:hover:not(:disabled) {
+      background: #2b6cb0;
+    }
+    button.danger {
+      background: #e53e3e;
+      color: white;
+    }
+    button.danger:hover:not(:disabled) {
+      background: #c53030;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      transform: none;
+    }
+
+    .columns {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .col {
+      flex: 1;
+    }
+    .panel-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    pre {
+      background: #f7fafc;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 13px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <div class="header-row">
+    <div class="title-block">
+      <h1>점심메뉴 아키네이터 (웹)</h1>
+      <div class="sub">아키네이터처럼 질문 몇 개로 점심 메뉴를 좁혀 가는 웹 버전</div>
+    </div>
+    <div class="genie-block">
+      <!-- 질문/정답 상태에 따라 이미지만 바꿔 끼움 -->
+      <img id="genieImg"
+           src="genie_question.jpg"
+           alt="Akinator"
+      />
+    </div>
+  </div>
+
+  <div class="question-block">
+    <div id="question" class="question-text">
+      시작하려면 "다음 질문" 버튼을 눌러주세요.
+    </div>
+    <div class="desc">
+      응답: 예 / 아니오 / 모르겠습니다 / 그럴 겁니다 / 아닐 겁니다
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button id="btnYes">예</button>
+    <button id="btnNo">아니오</button>
+    <button id="btnUnknown">모르겠습니다</button>
+    <button id="btnProbYes">그럴 겁니다</button>
+    <button id="btnProbNo">아닐 겁니다</button>
+  </div>
+
+  <div class="button-row">
+    <button id="btnNext" class="primary">다음 질문</button>
+    <button id="btnReset" class="danger">리셋</button>
+  </div>
+
+  <div class="columns">
+    <div class="col">
+      <div class="panel-title">현재 추천 상위 메뉴</div>
+      <pre id="topMenus"></pre>
+    </div>
+    <div class="col">
+      <div class="panel-title">디버그 / 상태 정보</div>
+      <pre id="debugInfo"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ========================= 메뉴 데이터 =========================
+  // 지금은 6개 예시. 구조는 그대로 두고 나중에 'menus' 배열만 확장하면 됨.
+  const menus = [
+    {
+      name: '김치찌개',
+      cuisine_kor: 1, cuisine_chi: 0, cuisine_jp: 0, cuisine_west: 0, cuisine_etc: 0,
+      spicy: 0.8,
+      soup: 1.0,
+      rice: 1.0,
+      noodle: 0.0,
+      bread: 0.0,
+      meat_heavy: 0.7,
+      light: 0.3,
+      late_night: 0.4,
+      single_meal: 1.0
+    },
+    {
+      name: '된장찌개',
+      cuisine_kor: 1, cuisine_chi: 0, cuisine_jp: 0, cuisine_west: 0, cuisine_etc: 0,
+      spicy: 0.2,
+      soup: 1.0,
+      rice: 1.0,
+      noodle: 0.0,
+      bread: 0.0,
+      meat_heavy: 0.3,
+      light: 0.7,
+      late_night: 0.4,
+      single_meal: 1.0
+    },
+    {
+      name: '마라탕',
+      cuisine_kor: 0, cuisine_chi: 1, cuisine_jp: 0, cuisine_west: 0, cuisine_etc: 0,
+      spicy: 1.0,
+      soup: 1.0,
+      rice: 0.2,
+      noodle: 0.8,
+      bread: 0.0,
+      meat_heavy: 0.8,
+      light: 0.2,
+      late_night: 0.7,
+      single_meal: 1.0
+    },
+    {
+      name: '치킨',
+      cuisine_kor: 1, cuisine_chi: 0, cuisine_jp: 0, cuisine_west: 0, cuisine_etc: 0,
+      spicy: 0.4,
+      soup: 0.0,
+      rice: 0.3,
+      noodle: 0.0,
+      bread: 0.0,
+      meat_heavy: 1.0,
+      light: 0.1,
+      late_night: 1.0,
+      single_meal: 0.8
+    },
+    {
+      name: '피자',
+      cuisine_kor: 0, cuisine_chi: 0, cuisine_jp: 0, cuisine_west: 1, cuisine_etc: 0,
+      spicy: 0.2,
+      soup: 0.0,
+      rice: 0.0,
+      noodle: 0.0,
+      bread: 1.0,
+      meat_heavy: 0.6,
+      light: 0.2,
+      late_night: 0.9,
+      single_meal: 0.7
+    },
+    {
+      name: '샐러드',
+      cuisine_kor: 0, cuisine_chi: 0, cuisine_jp: 0, cuisine_west: 1, cuisine_etc: 0,
+      spicy: 0.0,
+      soup: 0.0,
+      rice: 0.0,
+      noodle: 0.0,
+      bread: 0.0,
+      meat_heavy: 0.1,
+      light: 1.0,
+      late_night: 0.3,
+      single_meal: 0.7
+    }
+  ];
+
+  // ========================= 질문 정의 =========================
+  // attr은 메뉴의 속성 이름, text는 실제 질문 텍스트
+  const questions = [
+    { attr: 'soup',        text: '국물이 있는 메뉴를 원하시나요?' },
+    { attr: 'spicy',       text: '오늘은 매운 음식이 당기시나요?' },
+    { attr: 'rice',        text: '밥 위주로 된 메뉴를 원하시나요?' },
+    { attr: 'noodle',      text: '면 요리가 땡기시나요?' },
+    { attr: 'bread',       text: '피자/버거/빵 같은 밀가루 베이스가 좋으신가요?' },
+    { attr: 'meat_heavy',  text: '고기가 메인인 메뉴를 찾으시나요?' },
+    { attr: 'light',       text: '배가 너무 무겁지 않은, 가벼운 메뉴가 좋으신가요?' },
+    { attr: 'late_night',  text: '야식 느낌의 메뉴를 찾으시나요?' },
+    { attr: 'single_meal', text: '1인분으로 깔끔하게 해결하고 싶으신가요?' }
+  ];
+
+  // ========================= 상태 변수 =========================
+  let logP = [];          // 각 메뉴의 로그 확률
+  let askedMask = [];     // 이미 질문한지 여부
+  let numQuestions = 0;
+  const maxQuestions = 12;
+  let currentQIdx = -1;
+  let finished = false;
+  let bestMenuIdx = 0;
+  const confThresh = 0.65;
+
+  // ========================= 유틸 함수 =========================
+  function initState() {
+    const K = menus.length;
+    logP = [];
+    for (let i = 0; i < K; i++) {
+      logP.push(Math.log(1.0 / K));
+    }
+    askedMask = new Array(questions.length).fill(false);
+    numQuestions = 0;
+    currentQIdx = -1;
+    finished = false;
+    bestMenuIdx = 0;
+    updateUI();
+  }
+
+  // 예/아니오/모르겠다/그럴겁니다/아닐겁니다에 대한 likelihood
+  function answerLikelihoodTables() {
+    // [예, 아니오, 모르겠다, 그럴 겁니다, 아닐 겁니다]
+    return {
+      pTrue:  [0.65, 0.05, 0.10, 0.15, 0.05],
+      pFalse: [0.10, 0.65, 0.10, 0.05, 0.10]
+    };
+  }
+
+  function normalizeLogProb(logArr) {
+    const m = Math.max(...logArr);
+    let s = 0.0;
+    for (let i = 0; i < logArr.length; i++) {
+      s += Math.exp(logArr[i] - m);
+    }
+    const logZ = m + Math.log(s);
+    return logArr.map(v => v - logZ); // log p(i|data)
+  }
+
+  function entropy(p) {
+    let sumP = 0.0;
+    for (let i = 0; i < p.length; i++) sumP += p[i];
+    if (sumP <= 0) return 0.0;
+    let E = 0.0;
+    for (let i = 0; i < p.length; i++) {
+      const v = p[i] / sumP;
+      if (v > 0) E -= v * (Math.log(v) / Math.log(2));
+    }
+    return E;
+  }
+
+  // ========================= 아키네이터 업데이트 =========================
+  function updateLogProbSoft(ansCode) {
+    const { pTrue, pFalse } = answerLikelihoodTables();
+    const ansIdx = ansCode - 1;   // 1~5 -> 0~4
+    const Q = questions[currentQIdx];
+    const attrName = Q.attr;
+    const K = menus.length;
+    const epsP = 1e-6;
+
+    for (let k = 0; k < K; k++) {
+      let a = menus[k][attrName];
+      a = Math.max(0, Math.min(1, a));
+      let pAnsGivenK = a * pTrue[ansIdx] + (1 - a) * pFalse[ansIdx];
+      if (pAnsGivenK < epsP) pAnsGivenK = epsP;
+      logP[k] += Math.log(pAnsGivenK);
+    }
+  }
+
+  function pickNextQuestion() {
+    if (finished) return -1;
+
+    const unused = [];
+    for (let j = 0; j < questions.length; j++) {
+      if (!askedMask[j]) unused.push(j);
+    }
+    if (unused.length === 0) return -1;
+
+    // 현재 분포
+    const w = [];
+    let s = 0.0;
+    for (let i = 0; i < logP.length; i++) {
+      const val = Math.exp(logP[i]);
+      w.push(val);
+      s += val;
+    }
+    for (let i = 0; i < w.length; i++) w[i] /= (s + Number.EPSILON);
+
+    const Hbefore = entropy(w);
+    const { pTrue, pFalse } = answerLikelihoodTables();
+
+    let bestGain = -Infinity;
+    let bestIdx = unused[0];
+
+    for (let idx = 0; idx < unused.length; idx++) {
+      const j = unused[idx];
+      const Q = questions[j];
+      const attrName = Q.attr;
+
+      const K = menus.length;
+      const a = new Array(K);
+      for (let k = 0; k < K; k++) {
+        a[k] = Math.max(0, Math.min(1, menus[k][attrName]));
+      }
+
+      const numAns = 5;
+      const pAns = new Array(numAns).fill(0.0);
+      const Hgiven = new Array(numAns).fill(0.0);
+
+      for (let ans = 0; ans < numAns; ans++) {
+        const joint = new Array(K).fill(0.0);
+        let sumJoint = 0.0;
+        for (let k = 0; k < K; k++) {
+          const pa = a[k] * pTrue[ans] + (1 - a[k]) * pFalse[ans];
+          joint[k] = w[k] * pa;
+          sumJoint += joint[k];
+        }
+        pAns[ans] = sumJoint;
+
+        if (sumJoint < 1e-12) {
+          Hgiven[ans] = 0.0;
+        } else {
+          const wPost = [];
+          for (let k = 0; k < K; k++) {
+            wPost.push(joint[k] / (sumJoint + Number.EPSILON));
+          }
+          Hgiven[ans] = entropy(wPost);
+        }
+      }
+
+      let totalAns = 0.0;
+      for (let aIdx = 0; aIdx < numAns; aIdx++) totalAns += pAns[aIdx];
+      if (totalAns <= 0) continue;
+      for (let aIdx = 0; aIdx < numAns; aIdx++) {
+        pAns[aIdx] /= (totalAns + Number.EPSILON);
+      }
+
+      let Hafter = 0.0;
+      for (let aIdx = 0; aIdx < numAns; aIdx++) {
+        Hafter += pAns[aIdx] * Hgiven[aIdx];
+      }
+      const gain = Hbefore - Hafter;
+
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestIdx = j;
+      }
+    }
+
+    return bestIdx;
+  }
+
+  function stepAkinator(ansCode) {
+    if (finished) return;
+    if (currentQIdx < 0) return;
+
+    updateLogProbSoft(ansCode);
+    logP = normalizeLogProb(logP);
+
+    askedMask[currentQIdx] = true;
+    numQuestions++;
+
+    // posterior 계산
+    const w = [];
+    let s = 0.0;
+    for (let i = 0; i < logP.length; i++) {
+      const val = Math.exp(logP[i]);
+      w.push(val);
+      s += val;
+    }
+    for (let i = 0; i < w.length; i++) w[i] /= (s + Number.EPSILON);
+
+    let maxP = -1.0;
+    let idx = 0;
+    for (let i = 0; i < w.length; i++) {
+      if (w[i] > maxP) {
+        maxP = w[i];
+        idx = i;
+      }
+    }
+
+    if ((maxP >= confThresh && numQuestions >= 3) || numQuestions >= maxQuestions) {
+      finished = true;
+      bestMenuIdx = idx;
+    }
+  }
+
+  // ========================= UI 업데이트 =========================
+  function updateUI() {
+    const qEl   = document.getElementById('question');
+    const topEl = document.getElementById('topMenus');
+    const dbgEl = document.getElementById('debugInfo');
+    const genie = document.getElementById('genieImg');
+
+    if (finished) {
+      const bestName = menus[bestMenuIdx].name;
+      qEl.textContent = `제가 생각하기에 "${bestName}" 메뉴가 가장 잘 어울립니다.`;
+
+      // 정답 포즈 이미지
+      if (genie) genie.src = 'genie_result.jpg';
+    } else {
+      // 질문 포즈 이미지
+      if (genie) genie.src = 'genie_question.jpg';
+
+      if (currentQIdx < 0) {
+        qEl.textContent = '시작하려면 "다음 질문" 버튼을 눌러주세요.';
+      } else {
+        const Q = questions[currentQIdx];
+        qEl.textContent = `Q${numQuestions + 1}) ${Q.text}`;
+      }
+    }
+
+    // Top 메뉴 표시
+    const w = [];
+    let s = 0.0;
+    for (let i = 0; i < logP.length; i++) {
+      const val = Math.exp(logP[i]);
+      w.push(val);
+      s += val;
+    }
+    for (let i = 0; i < w.length; i++) w[i] /= (s + Number.EPSILON);
+
+    const idxArr = [...Array(w.length).keys()];
+    idxArr.sort((a,b) => w[b] - w[a]);
+
+    if (idxArr.length === 0) {
+      topEl.textContent = '메뉴 데이터가 없습니다.';
+    } else {
+      const topN = Math.min(5, idxArr.length);
+      const lines = [];
+      for (let i = 0; i < topN; i++) {
+        const k = idxArr[i];
+        lines.push(`${i+1}) ${menus[k].name}  (P = ${w[k].toFixed(3)})`);
+      }
+      topEl.textContent = lines.join('\n');
+    }
+
+    // 디버그 정보
+    const dbgLines = [];
+    dbgLines.push(`질문 수: ${numQuestions} / 최대 ${maxQuestions}`);
+    dbgLines.push(`finished: ${finished}`);
+    if (w.length > 0) {
+      dbgLines.push(`Top1 확률: ${Math.max(...w).toFixed(3)}`);
+    }
+    const used = askedMask.filter(x => x).length;
+    dbgLines.push(`질문 사용 비율: ${(used / Math.max(1, questions.length)).toFixed(2)}`);
+    if (currentQIdx >= 0 && !finished) {
+      dbgLines.push(`현재 질문 index: ${currentQIdx}`);
+    }
+    dbgEl.textContent = dbgLines.join('\n');
+  }
+
+  // ========================= 버튼 핸들러 =========================
+  function onAnswer(ansCode) {
+    if (finished) return;
+    if (currentQIdx < 0) return;
+    stepAkinator(ansCode);
+    currentQIdx = -1;
+    updateUI();
+  }
+
+  function onNextQuestion() {
+    if (finished) {
+      updateUI();
+      return;
+    }
+    if (currentQIdx < 0) {
+      currentQIdx = pickNextQuestion();
+    }
+    updateUI();
+  }
+
+  function onReset() {
+    initState();
+  }
+
+  // ========================= 초기화 & 안전한 바인딩 =========================
+  window.addEventListener('DOMContentLoaded', () => {
+    function bind(id, handler) {
+      const el = document.getElementById(id);
+      if (!el) {
+        console.warn('버튼을 찾을 수 없습니다:', id);
+        return;
+      }
+      el.addEventListener('click', handler);
+    }
+
+    bind('btnYes',      () => onAnswer(1));
+    bind('btnNo',       () => onAnswer(2));
+    bind('btnUnknown',  () => onAnswer(3));
+    bind('btnProbYes',  () => onAnswer(4));
+    bind('btnProbNo',   () => onAnswer(5));
+    bind('btnNext',     onNextQuestion);
+    bind('btnReset',    onReset);
+
+    initState();
+  });
+</script>
+</body>
+</html>
